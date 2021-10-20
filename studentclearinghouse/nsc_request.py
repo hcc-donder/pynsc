@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-#import collections.abc
 import datetime
 from itertools import groupby 
-#import glob
-#import os
 import pandas as pd
 from pathlib import Path
 import re
-#import urllib
 import yaml
 from typing import Union
-
-#__version__ = "0.0.1"
 
 class NSCRequest(object):
     """
@@ -28,9 +22,9 @@ class NSCRequest(object):
     outputPath: str = '.'
     filename: str = ''
 
-    __current_day__ = None
-    __current_month__ = None
-    __current_year__ = None
+    _current_day__ = None
+    _current_month__ = None
+    _current_year__ = None
 
     def __init__(self, 
                  outputPath: str = '',
@@ -38,7 +32,8 @@ class NSCRequest(object):
                  inquiryType: str = '', 
                  search: str = '', 
                  enrolledStudents: bool = None, 
-                 config: dict = None) -> int:
+                 config: dict = None,
+                 config_file: str = ''):
         '''
         The constructor for NSCRequest class.
 
@@ -100,30 +95,35 @@ class NSCRequest(object):
                                         }
                                     }
 
-                                    This can come from a YAML formatted file 
-                                    named config.yml in the current directory.
+            config_file (str):      A filename, including path, to a YAML formatted file. If
+                                    config and config_file are both specified, config will be used.
         '''
-        __current_date__ = datetime.date.today()
+        _current_date = datetime.date.today()
 
-        self.__current_day__ = __current_date__.day
-        self.__current_month__ = __current_date__.month
-        self.__current_year__ = __current_date__.year
+        self._current_day__ = _current_date.day
+        self._current_month__ = _current_date.month
+        self._current_year__ = _current_date.year
 
         if config:
-            self.__config__ = config.copy()
+            self._config = config.copy()
         else:
-            with open("config.yml","r") as ymlfile:
-                cfg_l = yaml.load(ymlfile, Loader=yaml.FullLoader)
+            if config_file:
+                with open(config_file,"r") as ymlfile:
+                    cfg_l = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
-                if cfg_l["config"]["location"] == "self":
-                    self.__config__ = cfg_l.copy()
-                else:
-                    with open(cfg_l["config"]["location"] + "config.yml","r") as ymlfile2:
-                        self.__config__ = yaml.load(ymlfile2, Loader=yaml.FullLoader)
+                    if cfg_l["config"]["location"] == "self":
+                        self._config = cfg_l.copy()
+                    else:
+                        with open(cfg_l["config"]["location"] + "config.yml","r") as ymlfile2:
+                            self._config = yaml.load(ymlfile2, Loader=yaml.FullLoader)
+            else:
+                print("ERROR: No config or config_file was provided")
+                return
 
-        self.fice = self.__config__['school']['fice']
-        self.branch = self.__config__['school']['branch']
-        self.name = self.__config__['school']['name']
+        if config or config_file:
+            self.fice = self._config['school']['fice']
+            self.branch = self._config['school']['branch']
+            self.name = self._config['school']['name']
 
         self.inquiryType = 'PA' if inquiryType=='' else inquiryType
         self.enrolledStudents = enrolledStudents
@@ -131,8 +131,19 @@ class NSCRequest(object):
         if search=='':
             self.search = datetime.datetime.now().strftime('%Y%m%d')
         else:
-            # TODO Need to add logic to determine if YYYY, YYYYMM, or YYYYMMDD were provided
-            self.search = search
+            if len(search) == 4: # if YYYY
+                self.search = f'{search}0101'
+                print(f'Added month and day to search: {self.search}')
+            elif len(search) == 6: # if YYYYMM
+                self.search = f'{search}01'
+                print(f'Added day to search: {self.search}')
+            elif len(search) == 7 and search.contains('-'): # if YYYY-MM
+                self.search = f'{search[:4]}{search[5:6]}01'
+                print(f"Removed '-' and day to search: {self.search}")
+            elif len(search) == 10 and search.contains('-'): # if YYYY-MM-DD
+                self.search = search.replace('-','')
+            else:
+                self.search = search
 
         if outputPath != "":
             self.outputPath = Path(outputPath)
@@ -149,7 +160,9 @@ class NSCRequest(object):
         else:
             self.filename = filename
 
-    def create_request( self, df: pd.Dataframe = pd.DataFrame()):
+        return
+
+    def create_request( self, df: pd.Dataframe = pd.DataFrame()) -> int:
         if df.empty:
             print("ERROR")
             return(-1)
@@ -161,23 +174,7 @@ class NSCRequest(object):
         if ('SSN' in df.columns) and (self.inquiryType != "PA" or (self.inquiryType == "PA" and self.enrolledStudents == True)):
             print(f"WARNING: SSN provided but ignored - inquiry({self.inquiryType}), enrolled({self.enrolledStudents})")
 
-        # # If search is just YYYY, set to YYYY0101, if just YYYYMM, set to YYYYMM01.
-        # if (nchar(search) == 4) {
-        #     search %<>% paste0("0101")
-        #     warning(paste("search changed to", search))
-        # } else if (nchar(search) == 6) {
-        #     search %<>% paste0("01")
-        #     warning(paste("search changed to", search))
-        # } else if (nchar(search) == 7) {
-        #     search <- str_c( substr(search, 1, 4),
-        #                     substr(search, 6, 7),
-        #                     paste0("01") )
-        #     warning(paste("search changed to", search))
-        # }
-
         # nscFile <- file.path(path,fn)
-
-        # # Ensure DOB is a date formatted as YYYYMMDD
 
         r = pd.DataFrame(index=df.index)
         r.reset_index(inplace=True)
@@ -201,10 +198,16 @@ class NSCRequest(object):
         else:
             r.loc[:,"Suffix"] = ""
 
-        # Need to look at the first row's value to see if this column contains dates or strings
+        # Ensure DOB is a date formatted as YYYYMMDD
         if type(df.DOB[0]) == datetime.date:
             r.loc[:,"DOB"] = df.loc[:,"DOB"].apply(lambda x: x.strftime("%Y%m%d"))
         else:
+            try:
+                DOB_Dates = pd.to_datetime(df["DOB"], format="%Y%m%d")
+            except:
+                print("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
+                return(-20)
+
             r.loc[:,"DOB"] = df.loc[:,"DOB"]
 
         # # Check if the following optional fields are provided:
@@ -236,9 +239,11 @@ class NSCRequest(object):
         self.h = f"H1\t{self.fice}\t{self.branch}\t{self.name[:40].strip()}\t{datetime.datetime.now().strftime('%Y%m%d')}\t{self.inquiryType}\tI\n"
         self.t = f"T1\t{r.shape[0]}\n"
 
+        return(0)
+
     def to_file(self,
                 outputPath: str = "",
-                filename: str = ""):
+                filename: str = "") -> None:
 
         loc_op = Path(self.outputPath if outputPath=='' else outputPath)
         loc_fn = Path(self.filename if filename=='' else filename)
@@ -283,3 +288,4 @@ if __name__ == "__main__":
 
     nscr.create_request(testdf)
     nscr.to_file()
+
