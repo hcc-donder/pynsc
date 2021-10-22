@@ -25,7 +25,8 @@ if __name__ == "__main__":
             "Operating System :: OS Independent",
         ],
         # package_dir={"": "studentclearinghouse"},
-        packages=setuptools.find_packages(where="studentclearinghouse"),
+        #packages=setuptools.find_packages(where="studentclearinghouse"),
+        packages=["studentclearinghouse"],
         python_requires=">=3.9",
         zip_safe=False
     )
