@@ -24,7 +24,7 @@ if __name__ == "__main__":
             "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
             "Operating System :: OS Independent",
         ],
-        package_dir={"": "studentclearinghouse"},
+        #package_dir={"": "studentclearinghouse"},
         packages=setuptools.find_packages(where="studentclearinghouse"),
         python_requires=">=3.9",
         zip_safe=False
