@@ -1,4 +1,5 @@
-__version__ = "0.0.1"
+
+from studentclearinghouse.__version__ import __version__
 
 from .nsc_error import NSCError
 from .nsc_error import NSCConfigurationError
