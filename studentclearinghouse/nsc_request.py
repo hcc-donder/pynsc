@@ -1,12 +1,7 @@
-from __future__ import annotations
-
 import datetime
-from itertools import groupby 
 import pandas as pd
 from pathlib import Path
-import re
 import yaml
-from typing import Union
 
 class NSCRequest(object):
     """
@@ -40,7 +35,7 @@ class NSCRequest(object):
         Returns: 0 for success or error value
 
         Parameters:
-            df (pandas.Dataframe):  Default=None. The data to output to an NSC 
+            df (pandas.DataFrame):  Default=None. The data to output to an NSC 
                                     request file.
             inquiryType (str):      Default=None. The type of inquiry to create 
                                     (can be one of SE or PA). This is the same
@@ -111,7 +106,7 @@ class NSCRequest(object):
                 with open(config_file,"r") as ymlfile:
                     cfg_l = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
-                    if cfg_l["config"]["location"] == "self":
+                    if ("config" not in cfg_l or ("config" in cfg_l and "location" not in cfg_l["config"])) or cfg_l["config"]["location"] == "self":
                         self._config = cfg_l.copy()
                     else:
                         with open(cfg_l["config"]["location"] + "config.yml","r") as ymlfile2:
@@ -147,7 +142,7 @@ class NSCRequest(object):
 
         if outputPath != "":
             self.outputPath = Path(outputPath)
-            if ~self.outputPath.exists():
+            if not self.outputPath.exists():
                 print(f"WARNING - Path does not exist [{outputPath}]")
         else:
             self.outputPath = Path('.')
@@ -162,14 +157,18 @@ class NSCRequest(object):
 
         return
 
-    def create_request( self, df: pd.Dataframe = pd.DataFrame()) -> int:
+    def create_request(self, df: pd.DataFrame = pd.DataFrame()) -> int:
         if df.empty:
-            print("ERROR")
-            return(-1)
+            print("ERROR: Dataframe is empty")
+            # TODO: Raise error
+            # raise(-1)
+            return
 
         if any([item not in df.columns for item in ["FirstName","MiddleInitial","LastName","Suffix","DOB"]]):
-            print("ERROR")
-            return(-11)
+            print("ERROR: Missing one of the required columns")
+            # TODO: Raise error
+            # raise(-11)
+            return
 
         if ('SSN' in df.columns) and (self.inquiryType != "PA" or (self.inquiryType == "PA" and self.enrolledStudents == True)):
             print(f"WARNING: SSN provided but ignored - inquiry({self.inquiryType}), enrolled({self.enrolledStudents})")
@@ -177,7 +176,7 @@ class NSCRequest(object):
         # nscFile <- file.path(path,fn)
 
         r = pd.DataFrame(index=df.index)
-        r.reset_index(inplace=True)
+        # r.reset_index(inplace=True)
 
         if self.inquiryType == 'PA' and self.enrolledStudents == False and 'SSN' in df.columns:
             r.loc[:,'SSN'] = df.loc[:,'SSN']
@@ -199,14 +198,22 @@ class NSCRequest(object):
             r.loc[:,"Suffix"] = ""
 
         # Ensure DOB is a date formatted as YYYYMMDD
-        if type(df.DOB[0]) == datetime.date:
-            r.loc[:,"DOB"] = df.loc[:,"DOB"].apply(lambda x: x.strftime("%Y%m%d"))
+        def cvtdate(x):
+            try:
+                return(x.strftime('%Y%m%d'))
+            except:
+                return(np.nan)
+
+        if type(df["DOB"].values[0]) == datetime.date:
+            r.loc[:,"DOB"] = df.loc[:,"DOB"].apply(cvtdate)
         else:
             try:
                 DOB_Dates = pd.to_datetime(df["DOB"], format="%Y%m%d")
             except:
                 print("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
-                return(-20)
+                # TODO: Raise error
+                # raise(-20)
+                return
 
             r.loc[:,"DOB"] = df.loc[:,"DOB"]
 
@@ -219,8 +226,8 @@ class NSCRequest(object):
             print(f"WARNING - SearchBeginDate not provided - defaulting to {self.search}")
             r.loc[:,"SearchBeginDate"] = self.search
         else:
-            if type(df.loc[:,"SearchBeginDate"][0]) == datetime.date:
-                r.loc[:,"SearchBeginDate"] = df.loc[:,"SearchBeginDate"].apply(lambda x: x.strftime("%Y%m%d"))
+            if type(df["SearchBeginDate"].values[0]) == datetime.date:
+                r.loc[:,"SearchBeginDate"] = df.loc[:,"SearchBeginDate"].apply(cvtdate)
             else:
                 r.loc[:,"SearchBeginDate"] = df.loc[:,"SearchBeginDate"]
 
@@ -239,7 +246,7 @@ class NSCRequest(object):
         self.h = f"H1\t{self.fice}\t{self.branch}\t{self.name[:40].strip()}\t{datetime.datetime.now().strftime('%Y%m%d')}\t{self.inquiryType}\tI\n"
         self.t = f"T1\t{r.shape[0]}\n"
 
-        return(0)
+        return(self)
 
     def to_file(self,
                 outputPath: str = "",
@@ -274,6 +281,12 @@ if __name__ == "__main__":
                        config=nsc_config
                        )
 
+    nsc2 = NSCRequest( inquiryType="SE",
+                       #search="",
+                       enrolledStudents=True,
+                       config_file="studentclearinghouse\\config.yml"
+                       )
+
     testdf = pd.DataFrame({'FirstName':['FN1','FN2','FN3 This is really long and should be truncated'],
                            'MiddleInitial':['M','M','M'],
                            'LastName':['LN1','LN2 This is really long and should be truncated','LN3, Jr'],
@@ -282,10 +295,14 @@ if __name__ == "__main__":
                            'ReturnRequestField':['ID1.2020FA','ID2.2020FA','ID3.2020SP'],
                            'SearchBeginDate':[datetime.date(2020,8,15),datetime.date(2020,8,15),datetime.date(2020,1,10)]
                            })
+    testdf['DOB'] = pd.to_datetime(hcs['DOB'], format="%m/%d/%Y")
     testdf.loc[testdf.loc[:,"LastName"].str.contains(', Jr'),"Suffix"] = 'Jr'
     testdf.loc[:,"LastName"] = testdf.loc[:,"LastName"].str.replace('.*, Jr','',regex=True)
 
 
     nscr.create_request(testdf)
     nscr.to_file()
+
+    nsc2.create_request(testdf)
+    nsc2.to_file()
 
