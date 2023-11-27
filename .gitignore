@@ -130,8 +130,12 @@ dmypy.json
 /studentclearinghouse/config.yml
 *.csv
 *.OLD
+*.SAV
+<<<<<<< HEAD
 *.NEW
 *.new
 *.HUH
+=======
+>>>>>>> 60673ece7dad6f97b7b1fed37695eb2144174528
 .gitignore
 .vscode/
