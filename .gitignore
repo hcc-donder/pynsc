@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/studentclearinghouse/config.yml
+*.csv
+*.OLD
+*.NEW
+*.new
+*.HUH
+.gitignore
+.vscode/

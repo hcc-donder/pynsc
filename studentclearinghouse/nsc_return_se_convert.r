@@ -7,11 +7,10 @@
 #' be 'N'.
 #'
 #' @param fn Full path to the details file provided by NSC
-#' @param type The type of merge. Possible options are csv, fixed, other
 #' @keywords file
 #' @export
-#' @importFrom tidyr fill
-#' @importFrom magrittr %<>%
+#' @importFrom 
+#' @importFrom 
 #'
 nsc_return_se_convert <- function(fn) {
 
