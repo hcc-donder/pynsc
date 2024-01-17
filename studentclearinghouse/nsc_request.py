@@ -2,6 +2,7 @@ import datetime
 import pandas as pd
 from pathlib import Path
 import yaml
+from numpy import datetime64 as numpy_datetime64
 
 class NSCRequest(object):
     """
@@ -159,16 +160,14 @@ class NSCRequest(object):
 
     def create_request(self, df: pd.DataFrame = pd.DataFrame()) -> int:
         if df.empty:
-            print("ERROR: Dataframe is empty")
-            # TODO: Raise error
-            # raise(-1)
-            return
+            # print("ERROR: Dataframe is empty")
+            raise ValueError("Dataframe is empty")
 
         if any([item not in df.columns for item in ["FirstName","MiddleInitial","LastName","Suffix","DOB"]]):
-            print("ERROR: Missing one of the required columns")
-            # TODO: Raise error
-            # raise(-11)
-            return
+            # identify this column is missing from the list
+            missing = [item for item in ["FirstName","MiddleInitial","LastName","Suffix","DOB"] if item not in df.columns]
+            # print(f"ERROR: Missing one of the required columns: {missing}")
+            raise ValueError(f"ERROR: Missing one of the required columns: {missing}")
 
         if ('SSN' in df.columns) and (self.inquiryType != "PA" or (self.inquiryType == "PA" and self.enrolledStudents == True)):
             print(f"WARNING: SSN provided but ignored - inquiry({self.inquiryType}), enrolled({self.enrolledStudents})")
@@ -204,16 +203,14 @@ class NSCRequest(object):
             except:
                 return(np.nan)
 
-        if type(df["DOB"].values[0]) == datetime.date:
+        if isinstance(df["DOB"].values[0], datetime.date) or isinstance(df["DOB"].values[0], datetime.datetime) or isinstance(df["DOB"].values[0], numpy_datetime64):
             r.loc[:,"DOB"] = df.loc[:,"DOB"].apply(cvtdate)
         else:
             try:
-                DOB_Dates = pd.to_datetime(df["DOB"], format="%Y%m%d")
+                _ = pd.to_datetime(df["DOB"], format="%Y%m%d")
             except:
-                print("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
-                # TODO: Raise error
-                # raise(-20)
-                return
+                # print("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
+                raise ValueError("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
 
             r.loc[:,"DOB"] = df.loc[:,"DOB"]
 
@@ -226,7 +223,7 @@ class NSCRequest(object):
             print(f"WARNING - SearchBeginDate not provided - defaulting to {self.search}")
             r.loc[:,"SearchBeginDate"] = self.search
         else:
-            if type(df["SearchBeginDate"].values[0]) == datetime.date:
+            if isinstance(df["SearchBeginDate"].values[0], datetime.date) or isinstance(df["SearchBeginDate"].values[0], datetime.datetime) or isinstance(df["SearchBeginDate"].values[0], numpy_datetime64):
                 r.loc[:,"SearchBeginDate"] = df.loc[:,"SearchBeginDate"].apply(cvtdate)
             else:
                 r.loc[:,"SearchBeginDate"] = df.loc[:,"SearchBeginDate"]
@@ -244,7 +241,7 @@ class NSCRequest(object):
 
         self.r = r.loc[r.loc[:,"FirstName"].notna(),["RecordType","SSN","FirstName","MiddleInitial","LastName","Suffix","DOB","SearchBeginDate","Blank","SchoolCode","BranchCode","ReturnRequestField"]]
         self.h = f"H1\t{self.fice}\t{self.branch}\t{self.name[:40].strip()}\t{datetime.datetime.now().strftime('%Y%m%d')}\t{self.inquiryType}\tI\n"
-        self.t = f"T1\t{r.shape[0]}\n"
+        self.t = f"T1\t{r.shape[0]+2}\n"
 
         return(self)
 
@@ -295,13 +292,16 @@ if __name__ == "__main__":
                            'ReturnRequestField':['ID1.2020FA','ID2.2020FA','ID3.2020SP'],
                            'SearchBeginDate':[datetime.date(2020,8,15),datetime.date(2020,8,15),datetime.date(2020,1,10)]
                            })
-    testdf['DOB'] = pd.to_datetime(hcs['DOB'], format="%m/%d/%Y")
+    testdf['DOB'] = pd.to_datetime(testdf['DOB'], format="%Y%m%d")
     testdf.loc[testdf.loc[:,"LastName"].str.contains(', Jr'),"Suffix"] = 'Jr'
     testdf.loc[:,"LastName"] = testdf.loc[:,"LastName"].str.replace('.*, Jr','',regex=True)
 
 
     nscr.create_request(testdf)
-    nscr.to_file()
+    # nscr.to_file()
+
+    nscr.create_request(testdf.drop(columns=['ReturnRequestField']))
+    nscr.create_request(testdf.drop(columns=['FirstName']))
 
     nsc2.create_request(testdf)
     nsc2.to_file()
