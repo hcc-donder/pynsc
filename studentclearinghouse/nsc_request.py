@@ -136,10 +136,10 @@ class NSCRequest(object):
             elif len(search) == 7 and search.contains('-'): # if YYYY-MM
                 self.search = f'{search[:4]}{search[5:6]}01'
                 print(f"Removed '-' and day to search: {self.search}")
-            elif len(search) == 10 and search.contains('-'): # if YYYY-MM-DD
-                self.search = search.replace('-','')
+            #elif len(search) == 10 and search.contains('-'): # if YYYY-MM-DD
+            #    self.search = search.replace('-','')
             else:
-                self.search = search
+                self.search = search.replace('-','')
 
         if outputPath != "":
             self.outputPath = Path(outputPath)
@@ -183,6 +183,7 @@ class NSCRequest(object):
             r.loc[:,'SSN'] = ""
 
         r.loc[:,"FirstName"] = df.loc[:,"FirstName"].str[:20].str.strip().str.encode('ascii','ignore').str.decode('ascii')
+        r.loc[:,"FirstName"] = r.loc[:,"FirstName"].str.replace('.','')
 
         if "MiddleInitial" in df.columns:
             r.loc[:,"MiddleInitial"] = df.loc[:,"MiddleInitial"].str[:1].str.strip().str.encode('ascii','ignore').str.decode('ascii')
@@ -207,12 +208,12 @@ class NSCRequest(object):
             r.loc[:,"DOB"] = df.loc[:,"DOB"].apply(cvtdate)
         else:
             try:
-                _ = pd.to_datetime(df["DOB"], format="%Y%m%d")
+                r.loc[:,"DOB"] = pd.to_datetime(df["DOB"], format="%Y%m%d")
             except:
                 # print("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
                 raise ValueError("ERROR: DOB does not contain dates as strings in the format YYYYMMDD")
 
-            r.loc[:,"DOB"] = df.loc[:,"DOB"]
+            #r.loc[:,"DOB"] = pd.to_datetime(df["DOB"], format="%Y%m%d") # df.loc[:,"DOB"]
 
         # # Check if the following optional fields are provided:
         # #     SearchBeginDate, ReturnRequestField
